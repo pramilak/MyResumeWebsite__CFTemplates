@@ -1,0 +1,127 @@
+Parameters:
+  ACMCertARN:
+    Description: ACM CloudFront Certificate ARN
+    Type: String
+
+  RootDomainName:
+    Description: Domain name for your website
+    Type: String
+
+  CDNAltDomainName:                             #Alternate domain name for CloudFront
+    Description: Alternate domain name for CloudFront
+    Type: String
+
+  CDNHostedZoneID:
+    Description: Route 53 Hosted Zone ID for CloudFront
+    Type: String
+    Default: Z2FDTNDATAQYW2
+
+  S3BucketName:
+    Type: String
+    Default: myresume-staticwebsite
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+      AccessControl: Private
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      Tags: 
+      - Key: "CreatedBy"
+        Value: "Prams"
+
+  BucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref S3Bucket    
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOriginAccessIdentity}"
+            Action: 's3:GetObject'
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3Bucket
+                - /*
+
+  MyDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      Tags: 
+      - Key: "CreatedBy"
+        Value: "Prams"
+      DistributionConfig:
+        Aliases: 
+        - !Ref CDNAltDomainName
+        CustomErrorResponses:
+          - ErrorCachingMinTTL: 10    #The minimum amount of time in seconds
+            ErrorCode: 404
+            ResponseCode: 404
+            ResponsePagePath: '/error.html'      
+        Origins:
+        - DomainName: !GetAtt S3Bucket.RegionalDomainName
+          Id: myS3Origin
+          S3OriginConfig:
+            OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+        Enabled: 'true'
+        Comment: !Sub "CloudFront Distribution for ${S3BucketName}"
+        DefaultRootObject: index.html
+        DefaultCacheBehavior:
+          AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+          CachedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6     #Refer using-managed-cache-policies.html
+          TargetOriginId: myS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          AcmCertificateArn: !Ref ACMCertARN
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+                
+  MyDNS:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneName: !Sub 
+          - ${Domain}.
+          - Domain: !Ref RootDomainName
+      Comment: Zone apex alias.
+      RecordSets:
+      - Name: !Ref CDNAltDomainName
+        Type: A
+        AliasTarget:
+          HostedZoneId: !Ref CDNHostedZoneID
+          DNSName: !GetAtt MyDistribution.DomainName
+
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub "MyDistribution OAI for ${S3BucketName}"
+
+Outputs:
+  WebsiteURL:
+    Description: 'Website URL'
+    Value: !Ref CDNAltDomainName
+
+  DistributionId:
+    Description: 'CloudFront Distribution ID'
+    Value: !Ref MyDistribution
+
+  Domain:
+    Description: 'Cloudfront Domain'
+    Value: !GetAtt MyDistribution.DomainName

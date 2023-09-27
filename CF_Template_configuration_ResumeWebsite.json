@@ -1,0 +1,9 @@
+{
+  "Parameters" : {
+    "ACMCertARN" : "arn:aws:acm:us-east-1:467069435281:certificate/03127741-610e-4062-95c2-450b614918de",
+    "RootDomainName" : "stareventhorizon.com",
+    "CDNAltDomainName" : "myresume.stareventhorizon.com",
+    "CDNHostedZoneID" : "Z2FDTNDATAQYW2",
+    "S3BucketName" : "myresumestaticwebsite"    
+  }
+}
